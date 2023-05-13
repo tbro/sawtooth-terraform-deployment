@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  .dockerconfigjson: eyJhdXRocyI6eyJyZWdpc3RyeS5naXRsYWIuY29tIjp7InVzZXJuYW1lIjoidmlkYWxvb3Atdm90aW5nYXBwLXJlZ2lzdHJ5LWRldi1sZWRnZXIiLCJwYXNzd29yZCI6IlBNS1M0NUZjczVLSjlkeUtONXBUIiwiYXV0aCI6ImRtbGtZV3h2YjNBdGRtOTBhVzVuWVhCd0xYSmxaMmx6ZEhKNUxXUmxkaTFzWldSblpYSTZVRTFMVXpRMVJtTnpOVXRLT1dSNVMwNDFjRlE9In19fQ==
+kind: Secret
+metadata:
+  name: docker-registry
+  namespace: metrics
+type: kubernetes.io/dockerconfigjson

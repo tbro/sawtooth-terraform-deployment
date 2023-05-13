@@ -1,0 +1,31 @@
+#!/usr/bin/bash
+
+set -ex
+
+printenv
+
+cp /mnt/config/validator.toml /etc/sawtooth/validator.toml
+
+[[ `hostname` =~ -([0-9]+)$ ]] || exit 1
+ordinal=$${BASH_REMATCH[1]}
+%{ for index, node in nodes }
+
+if [[ $ordinal -eq ${index} ]]; then
+%{if index == 0 ~}
+  rm -f /var/lib/sawtooth/genesis.batch
+  # intialized chain + genesis batch will crash validator
+  # so we check if for a block-chain-id
+  if [[ ! -f /var/lib/sawtooth/block-chain-id ]]; then
+      cp /mnt/genesis/genesis.batch /var/lib/sawtooth/genesis.batch
+  fi
+%{endif ~}
+  sawtooth-validator -vv \
+    --endpoint tcp://ledger-${index}.votingapp.election.svc.cluster.local:8800 \
+    --bind component:tcp://eth0:4004 \
+    --bind network:tcp://eth0:8800 \
+    --bind consensus:tcp://eth0:5050 \
+    %{~ for inner_index, inner_node in slice(nodes, 0, index) ~}
+  %{if inner_index != index ~}--peers tcp://ledger-${inner_index}.votingapp.election.svc.cluster.local:8800 %{endif ~}
+    %{~ endfor}
+fi
+%{ endfor }

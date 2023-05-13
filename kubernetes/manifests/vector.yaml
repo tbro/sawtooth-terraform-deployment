@@ -1,0 +1,210 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: null
+  name: vector
+spec: {}
+status: {}
+---
+apiVersion: v1
+automountServiceAccountToken: true
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/component: Agent
+    app.kubernetes.io/instance: vector
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/version: 0.21.2-distroless-libc
+  name: vector
+  namespace: vector
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/component: Agent
+    app.kubernetes.io/instance: vector
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/version: 0.21.2-distroless-libc
+  name: vector
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - pods
+  verbs:
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: Agent
+    app.kubernetes.io/instance: vector
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/version: 0.21.2-distroless-libc
+  name: vector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vector
+subjects:
+- kind: ServiceAccount
+  name: vector
+  namespace: vector
+---
+apiVersion: v1
+data:
+  agent.yaml: |
+    data_dir: /vector-data-dir
+    api:
+      enabled: true
+      address: 127.0.0.1:8686
+      playground: false
+    sources:
+      kubernetes_logs:
+        type: kubernetes_logs
+      host_metrics:
+        filesystem:
+          devices:
+            excludes: [binfmt_misc]
+          filesystems:
+            excludes: [binfmt_misc]
+          mountPoints:
+            excludes: ["*/proc/sys/fs/binfmt_misc"]
+        type: host_metrics
+      internal_metrics:
+        type: internal_metrics
+    transforms:
+      compose:
+        type: remap
+        inputs:
+          - kubernetes_logs
+        source: |-
+          .id = uuid_v4()
+          .container = .kubernetes.container_name
+          .pod = .kubernetes.pod_name
+          .namespace = .kubernetes.pod_namespace
+          .node = .kubernetes.pod_node_name
+          .seconds = to_unix_timestamp(to_timestamp!(.timestamp), unit: "milliseconds")
+          del(.kubernetes)
+    sinks:
+      stdout:
+        type: console
+        inputs: [compose]
+        encoding:
+          codec: json
+      search:
+        type: http
+        inputs:
+          - compose
+        uri: http://meilisearch.search:7700/indexes/visibility/documents
+        encoding:
+          codec: json
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/component: Agent
+    app.kubernetes.io/instance: vector
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/version: 0.21.2-distroless-libc
+  name: vector
+  namespace: vector
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app.kubernetes.io/component: Agent
+    app.kubernetes.io/instance: vector
+    app.kubernetes.io/name: vector
+    app.kubernetes.io/version: 0.21.2-distroless-libc
+  name: vector
+  namespace: vector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: Agent
+      app.kubernetes.io/instance: vector
+      app.kubernetes.io/name: vector
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app.kubernetes.io/component: Agent
+        app.kubernetes.io/instance: vector
+        app.kubernetes.io/name: vector
+        vector.dev/exclude: "true"
+    spec:
+      containers:
+      - args:
+        - --config-dir
+        - /etc/vector/
+        env:
+        - name: VECTOR_SELF_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: VECTOR_SELF_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: VECTOR_SELF_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: PROCFS_ROOT
+          value: /host/proc
+        - name: SYSFS_ROOT
+          value: /host/sys
+        image: timberio/vector:0.21.2-distroless-libc
+        imagePullPolicy: IfNotPresent
+        name: vector
+        ports:
+        - containerPort: 9090
+          name: prom-exporter
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /vector-data-dir
+          name: data
+        - mountPath: /etc/vector/
+          name: config
+          readOnly: true
+        - mountPath: /var/log/
+          name: var-log
+          readOnly: true
+        - mountPath: /var/lib
+          name: var-lib
+          readOnly: true
+        - mountPath: /host/proc
+          name: procfs
+          readOnly: true
+        - mountPath: /host/sys
+          name: sysfs
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      serviceAccountName: vector
+      terminationGracePeriodSeconds: 60
+      volumes:
+      - name: config
+        projected:
+          sources:
+          - configMap:
+              name: vector
+      - hostPath:
+          path: /var/lib/vector
+        name: data
+      - hostPath:
+          path: /var/log/
+        name: var-log
+      - hostPath:
+          path: /var/lib/
+        name: var-lib
+      - hostPath:
+          path: /proc
+        name: procfs
+      - hostPath:
+          path: /sys
+        name: sysfs

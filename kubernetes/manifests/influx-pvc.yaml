@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    pv.kubernetes.io/bind-completed: "yes"
+    pv.kubernetes.io/bound-by-controller: "yes"
+    volume.beta.kubernetes.io/storage-provisioner: kubernetes.io/aws-ebs
+    volume.kubernetes.io/selected-node: ip-10-0-2-80.ec2.internal
+  creationTimestamp: "2022-10-27T19:13:42Z"
+  finalizers:
+  - kubernetes.io/pvc-protection
+  labels:
+    app: influxdb
+  name: data-influxdb-0
+  namespace: metrics
+  resourceVersion: "592387"
+  uid: 6337a84a-611c-402c-b7da-c47f9f5d4e8e
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10G
+  storageClassName: gp2
+  volumeMode: Filesystem
+  volumeName: pvc-6337a84a-611c-402c-b7da-c47f9f5d4e8e
+status:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 10Gi
+  phase: Bound
